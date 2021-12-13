@@ -5,11 +5,14 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.LocationManager;
+import android.media.AudioAttributes;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
@@ -38,11 +41,15 @@ import java.security.Provider;
 import java.util.Vector;
 
 public class MainActivity extends AppCompatActivity {
+    private String CHANNEL_ID = "gps_message_01";
+    private String CHANNEL_ID_SERVICE = "gps_service_01";
+    private String CHANNEL_NAME = "Warning message";
+    private String CHANNEL_NAME_SERVICE = "GPS tracking service";
 
     private AppBarConfiguration appBarConfiguration;
     private ActivityMainBinding binding;
     private String MAP_ID="1aPQbHgj6-sXbbI4K5MDuRkK7Oe0Sr5U4&ll=50.923479396995546%2C30.177172773963747&z";
-    private String PREF_RUNNING = "service_status";
+    private String PREF_RUNNING = "service_status_preference";
     myDbAdapter helper=new myDbAdapter(this);
     public static SharedPreferences sharedPreferences;
 
@@ -56,6 +63,8 @@ public class MainActivity extends AppCompatActivity {
      //   sharedPreferences.edit().putString (PREF_RUNNING, "stopped").apply();
 
        TextView ServiceStatus = findViewById(R.id.ServiceStatus);
+        createServiceNotificationChannel();
+        createCameraWarningNotificationChannel();
        // ServiceStatus.setText(String.valueOf(sharedPreferences.getBoolean(PREF_RUNNING,false)));
        //binding.ServiceStatus.setText(String.valueOf(preferences.getBoolean(PREF_RUNNING,false)));
        // myDbAdapter helper;
@@ -159,21 +168,41 @@ public class MainActivity extends AppCompatActivity {
         return locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
     }
 
- /*   public void addUser( String name, Float x, Float y)
-    {
+    private void createServiceNotificationChannel() {
 
-
-      long id= helper.insertData(name,x,y);
-        helper.getData();
-      if(id<=0)
-      {   Log.d ("SQL", "Error");
-
-       } else
-      {
-           Log.d ("SQL", "OK");
-       }
-      Log.d ("SQL",helper.getData());
-    } */
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            CharSequence name = getString(R.string.channel_name);
+            String description = getString(R.string.channel_description);
+            int importance = NotificationManager.IMPORTANCE_NONE;
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID_SERVICE, name, importance);
+            channel.setDescription(description);
+            NotificationManager notificationManager = getSystemService(NotificationManager.class);
+            notificationManager.createNotificationChannel(channel);
+        }
+    }
+    private void createCameraWarningNotificationChannel() {
+        Uri soundUri = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + getPackageName() + "/raw/alarm");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            CharSequence name = getString(R.string.channel_warning_name);
+            String description = getString(R.string.channel_warning_description);
+            int importance = NotificationManager.IMPORTANCE_HIGH;
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, name, importance);
+            channel.setDescription(description);
+            channel.setSound(soundUri, new AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
+                    .build());
+            channel.enableVibration(true);
+            //  channel.setSound(null, null);
+            channel.enableVibration(false);
+            channel.setVibrationPattern(new long[]{100, 200, 300, 400, 500, 400, 300, 200, 400});
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                channel.canBubble();
+            }
+            NotificationManager notificationManager = getSystemService(NotificationManager.class);
+            notificationManager.createNotificationChannel(channel);
+        }
+    }
 }
 
 

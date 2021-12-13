@@ -4,57 +4,49 @@ import android.app.*;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
-import android.graphics.Color;
-import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationManager;
 import android.media.AudioAttributes;
 import android.media.AudioManager;
-import android.media.RingtoneManager;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.util.Log;
-import android.view.View;
 import android.widget.TextView;
 import androidx.annotation.RequiresApi;
-import android.content.res.Resources;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
 import java.util.Vector;
 
-import static androidx.core.app.NotificationCompat.PRIORITY_DEFAULT;
 import static androidx.core.app.NotificationCompat.PRIORITY_MIN;
 
 @RequiresApi(api = Build.VERSION_CODES.O)
 public class MyService extends Service {
-    private static final int LOCATION_INTERVAL = 1000 * 10;
     private static final float LOCATION_DISTANCE = 0;
     private static final String TAG = "GPS";
     private LocationManager mLocationManager = null;
     private NotificationChannel channel;
     private NotificationManager notificationManager;
     private NotificationManagerCompat mBuilder;
-    private String PREF_RUNNING = "service_status";
-    private String CHANNEL_ID = "Warning";
+    private String PREF_RUNNING = "service_status_preference";
+    private String PREF_LOCATION_UPDATE_INTERVAL = "location_update_interval_preference";
+    private String CHANNEL_ID = "gps_message_01";
     private String CHANNEL_NAME_SERVICE = "GPS tracking service";
-    private String CHANNEL_ID_SERVICE = "GPS service";
+    private String CHANNEL_ID_SERVICE = "gps_service_01";
     private String CHANNEL_NAME = "Warning message";
-    private static Boolean isRunning=false;
-    private static Double oldDistance=0.0;
-    private static Long oldTime=0l;
+    private static boolean isRunning=false;
+    private static boolean nextCameraInFocus=false;
+    private static boolean showOnce=false;
+    private static double oldDistance=0.0;
+    private static long oldTime=0l;
 
 
     public static Boolean isSericeRunning () {
 
         return isRunning;
     }
-
-
 
 
     private class LocationListener implements android.location.LocationListener {
@@ -72,26 +64,53 @@ public class MyService extends Service {
             Log.e(TAG, "onLocationChanged: " + location);
             myDbAdapter adapter=new myDbAdapter(getApplicationContext());
             Vector data=adapter.getData();
-            for (int i=0; i<data.size();i+=3 ){
-                Double distance= Haversine.distance(Double.parseDouble(String.valueOf(data.get(2+i))), Double.parseDouble(String.valueOf(data.get(1+i))),
-                        Double.parseDouble(String.valueOf(location.getLatitude())),Double.parseDouble(String.valueOf(location.getLongitude())));
-                if (distance <3.2)  Log.e(TAG, "Distance: " + distance + " "+ String.valueOf(data.get(i)) + location.getTime());
 
-               if (distance <3.2 && distance > oldDistance && (location.getTime()-oldTime>10000)) {
-                   showNotification( distance + " " + String.valueOf(data.get(i)));
+            for (int i=0; i<data.size();i+=3 ){
+                double distance= Haversine.distance(Double.parseDouble(String.valueOf(data.get(2+i))), Double.parseDouble(String.valueOf(data.get(1+i))),
+                        Double.parseDouble(String.valueOf(location.getLatitude())),Double.parseDouble(String.valueOf(location.getLongitude())));
+                if (distance < 0.7 &&  !nextCameraInFocus) {
+                        mLocationManager.requestLocationUpdates(
+                                location.getProvider(), (2000), LOCATION_DISTANCE,
+                                new LocationListener(location.getProvider()));
+                    nextCameraInFocus = true;
+                    break;
+
+                }
+                if ((distance > 1.0 ) && (nextCameraInFocus = true)) {
+                    mLocationManager.requestLocationUpdates(
+                            location.getProvider(), (getSharedPreferences("com.heineken.speedcam", Context.MODE_MULTI_PROCESS).getInt(PREF_LOCATION_UPDATE_INTERVAL, 40000)), LOCATION_DISTANCE,
+                            new LocationListener(location.getProvider()));
+                    nextCameraInFocus=false;
+                    showOnce=false;
+                }
+                if (distance < 0.4 && !showOnce ) {
+                    showNotification( (getString(R.string.notification_message) +" " + String.format("%.0f", distance*1000) + "m. "+ String.valueOf(data.get(i))));
+                    showOnce=true;
+                    break;
+                }
+               // if (nextCameraInFocus) {
+               //     showNotification( getString(R.string.notification_message) +" " + String.format("%.0f", distance*100) + "m. "+ String.valueOf(data.get(i)));
+               //     Log.e(TAG, "onLocationChanged: " + nextCameraInFocus);
+               //     break; }
+
+
+               /* if (distance <0.35 && distance > oldDistance && (location.getTime()-oldTime>10000)) {
+                   showNotification( getString(R.string.notification_message) +" " + String.format("%.0f", distance*100) + "m. "+ String.valueOf(data.get(i)));
                    oldTime=location.getTime();
                    oldDistance=distance;
-
                    break; }
-                if (distance <3.2  && location.getTime()-oldTime>20000) {
+
+                if (distance <0.35  && location.getTime()-oldTime>=20000) {
                     oldTime = 0l;
-                    oldDistance = 0.0;
+                    oldDistance = 0.0;/*
                 }
+                mLocationManager.requestLocationUpdates(
+                        location.getProvider(), (getApplicationContext().getSharedPreferences("com.heineken.speedcam", Context.MODE_MULTI_PROCESS).getInt(PREF_LOCATION_UPDATE_INTERVAL, 10000)), LOCATION_DISTANCE,
+                        mLocationListeners[0]);
+                        */
+
 
             }
-
-
-            //  showNotification(location.toString());
 
         }
 
@@ -124,31 +143,22 @@ public class MyService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.e(TAG, "onStartCommand");
+
         myDbAdapter adapter=new myDbAdapter(getApplicationContext());
         /* exit when database empty */
         Vector data=adapter.getData();
-        Log.d ("Debug text" , this.getSharedPreferences("com.heineken.speedcam", Context.MODE_MULTI_PROCESS).getString(PREF_RUNNING, ""));
-        if (data.size() < 1)  stopSelf();
-        if (this.getSharedPreferences("com.heineken.speedcam", Context.MODE_MULTI_PROCESS).getString(PREF_RUNNING, "")=="Running") stopForeground(true);
-      // stopSelf();
-       // stopSelf();
 
+        if ((data.size() < 1)||(this.getSharedPreferences("com.heineken.speedcam", Context.MODE_MULTI_PROCESS).getString(PREF_RUNNING, "")=="Running"))
+        { stopForeground(true);
+            stopSelf();}
 
         /* message that service is started */
         isRunning =true;
         this.getSharedPreferences("com.heineken.speedcam", Context.MODE_MULTI_PROCESS).edit().putString(PREF_RUNNING, "Running").commit();
-        //super.onStartCommand(intent, flags, startId);
 
-        //     stopSelf();
-        //  startServiceOreoCondition();
-
-        //shagetBoolean(PREF_RUNNING,false);
-        //   MainActivity.sharedPreferences.edit().putBoolean (PREF_RUNNING, true).apply();
 
         if (Build.VERSION.SDK_INT >= 26) {
-            NotificationChannel channel = new NotificationChannel(CHANNEL_ID_SERVICE, CHANNEL_NAME_SERVICE, NotificationManager.IMPORTANCE_NONE);
-            NotificationManager notificationManager = getSystemService(NotificationManager.class);
-            notificationManager.createNotificationChannel(channel);
+
         }
         Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID_SERVICE)
                 .setCategory(Notification.CATEGORY_SERVICE)
@@ -166,25 +176,22 @@ public class MyService extends Service {
         super.onCreate();
 
         initializeLocationManager();
-
-
-      //  try {
-      //      mLocationManager.requestLocationUpdates(
-      //              LocationManager.NETWORK_PROVIDER, LOCATION_INTERVAL, LOCATION_DISTANCE,
-     //               mLocationListeners[1]);
-      //  } catch (java.lang.SecurityException ex) {
-      //      Log.i(TAG, "fail to request location update, ignore", ex);
-      //  } catch (IllegalArgumentException ex) {
-      //      Log.d(TAG, "network provider does not exist, " + ex.getMessage());
-     //   }
         try {
             mLocationManager.requestLocationUpdates(
-                    LocationManager.GPS_PROVIDER, LOCATION_INTERVAL, LOCATION_DISTANCE,
+                    LocationManager.GPS_PROVIDER, (this.getSharedPreferences("com.heineken.speedcam", Context.MODE_MULTI_PROCESS).getInt(PREF_LOCATION_UPDATE_INTERVAL, 40000)), LOCATION_DISTANCE,
                     mLocationListeners[0]);
 
         } catch (java.lang.SecurityException ex) {
             Log.i(TAG, "fail to request location update, ignore", ex);
         } catch (IllegalArgumentException ex) {
+            try {  mLocationManager.requestLocationUpdates(
+                             LocationManager.NETWORK_PROVIDER, (this.getSharedPreferences("com.heineken.speedcam", Context.MODE_MULTI_PROCESS).getInt(PREF_LOCATION_UPDATE_INTERVAL, 40000)), LOCATION_DISTANCE,
+                              mLocationListeners[1]);
+                  } catch (java.lang.SecurityException ex2) {
+                      Log.i(TAG, "fail to request location update, ignore", ex);
+                  } catch (IllegalArgumentException ex2) {
+                      Log.d(TAG, "network provider does not exist, " + ex.getMessage());
+                 }
             Log.d(TAG, "gps provider does not exist " + ex.getMessage());
         }
     }
@@ -197,10 +204,6 @@ public class MyService extends Service {
         isRunning=false;
         this.getSharedPreferences("com.heineken.speedcam", Context.MODE_MULTI_PROCESS).edit().putString(PREF_RUNNING, "Not running").commit();
 
-        //MainActivity.sharedPreferences.edit().putBoolean (PREF_RUNNING, false).apply();
-        // MainActivity.sharedPreferences.getBoolean(PREF_RUNNING,false);
-        //  MainActivity.sharedPreferences.edit().putBoolean (PREF_RUNNING, true).apply();
-        //   isRunning = false;
         if (mLocationManager != null) {
             for (int i = 0; i < mLocationListeners.length; i++) {
                 try {
@@ -219,38 +222,16 @@ public class MyService extends Service {
         }
     }
 
-    private void startServiceOreoCondition() {
-
-    }
-
-
     public void showNotification(String loc) {
 
-        Uri soundUri = Uri.parse(ContentResolver.SCHEME_ANDROID_RESOURCE + "://" + getPackageName() + "/raw/alarm");
-        /* Oreo+ workarround */
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-
-            int importance = NotificationManager.IMPORTANCE_HIGH;
-
-            channel = new NotificationChannel(CHANNEL_ID, CHANNEL_NAME, importance);
-            //  channel.setDescription(description);
-            channel.setSound(soundUri, new AudioAttributes.Builder()
-                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
-                    .build());
-            NotificationManager notificationManager = getSystemService(NotificationManager.class);
-            if (notificationManager != null) {
-                notificationManager.createNotificationChannel(channel);
-            }
-        }
-        /* Oreo+ workarround */
         NotificationCompat.Builder mBuilder =
                 new NotificationCompat.Builder(this, CHANNEL_ID)
-                        .setSmallIcon(com.heineken.speedcam.R.drawable.ic_launcher_background)
-                        .setContentTitle("Hello, attention!")
-                        .setContentText(loc)
-                        .setSound(soundUri, AudioManager.STREAM_MUSIC)
-                        .setPriority(NotificationCompat.PRIORITY_HIGH);
+                        .setSmallIcon(R.drawable.ic_action_cam)
+                        .setContentTitle(getString(R.string.notification_title))
+                        .setPriority(NotificationCompat.PRIORITY_HIGH)
+                        .setContentText(loc);
+       // mBuilder.setPriority(NotificationCompat.PRIORITY_MIN);
+
         NotificationManagerCompat mNotificationManager = NotificationManagerCompat.from(this);
         mNotificationManager.notify(0, mBuilder.build());
         //    Notification notification = mBuilder.build();

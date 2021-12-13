@@ -45,6 +45,7 @@ public class myDbAdapter {
                 buffer.add (cursor.getFloat(cursor.getColumnIndex(myDbHelper.Y)));
                 //buffer.add(cid+ "   " + name + "   " + x + " " + y + " \n");
             }
+            db.close();
             return buffer;
         }
 
@@ -130,9 +131,10 @@ public class myDbAdapter {
        // Log.d ("SQL",getData());
     }
     public void deleteDBase()
-    {
+        {
         deleteDB();
 
-    }
+        }
+
     }
 

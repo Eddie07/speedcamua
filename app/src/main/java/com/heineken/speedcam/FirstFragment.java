@@ -32,7 +32,7 @@ import static androidx.core.content.ContextCompat.getSystemService;
 public class FirstFragment extends Fragment {
     private static final int MODE_MULTI_PROCESS = 4;
     private String MAP_ID = "1aPQbHgj6-sXbbI4K5MDuRkK7Oe0Sr5U4&ll=50.923479396995546%2C30.177172773963747&z";
-    private String PREF_RUNNING = "service_status";
+    private String PREF_RUNNING = "service_status_preference";
     private FragmentFirstBinding binding;
 
 
@@ -53,7 +53,6 @@ public class FirstFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         //  binding.ServiceStatus.setText(String.valueOf(MainActivity.sharedPreferences.getBoolean(PREF_RUNNING, false)));
 
-        binding.ServiceStatus.setText(String.valueOf(getActivity().getSharedPreferences(getActivity().getPackageName(), Context.MODE_MULTI_PROCESS).getString(PREF_RUNNING, "")));
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             binding.ServiceStatus.setText(MyService.isSericeRunning() ? "Running" : "Not running");
         } else {
@@ -115,15 +114,15 @@ public class FirstFragment extends Fragment {
                 //   binding.ServiceStatus.setText(gps.isRunning ? "Running" : "Not running");
                 // Log.d( "Service running:", String.valueOf((gps.isRunning)));
 
-               // switch (getActivity().getSharedPreferences(getActivity().getPackageName(), Context.MODE_MULTI_PROCESS).getString(PREF_RUNNING, "")) {
+                // switch (getActivity().getSharedPreferences(getActivity().getPackageName(), Context.MODE_MULTI_PROCESS).getString(PREF_RUNNING, "")) {
 
-             //       case "started":
-                      //  if (getActivity().stopService(new Intent(getActivity(), MyService.class)))
-                      //      binding.ServiceStatus.setText("stopped");
-                       //     break;
-               //     case "stopped":
+                //       case "started":
+                //  if (getActivity().stopService(new Intent(getActivity(), MyService.class)))
+                //      binding.ServiceStatus.setText("stopped");
+                //     break;
+                //     case "stopped":
 
-                  //  default:
+                //  default:
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     if (!MyService.isSericeRunning()) {
                         getActivity().startService(new Intent(getActivity(), MyService.class));
@@ -140,12 +139,15 @@ public class FirstFragment extends Fragment {
 
                         }
                     }, 2000);
-                } else
-                {  Log.d("Activity:", getActivity().getSharedPreferences(getActivity().getPackageName(), Context.MODE_MULTI_PROCESS).getString(PREF_RUNNING, ""));
-                    if (getActivity().getSharedPreferences(getActivity().getPackageName(), Context.MODE_MULTI_PROCESS).getString(PREF_RUNNING, "")!="Running")
-                    getActivity().startService(new Intent(getActivity(), MyService.class));
-                 else
-                    getActivity().stopService(new Intent(getActivity(), MyService.class));
+                } else {
+                   Log.d("Activity", getContext().getSharedPreferences(getActivity().getPackageName(), Context.MODE_MULTI_PROCESS).getString(PREF_RUNNING, ""));
+                    if (getContext().getSharedPreferences(getActivity().getPackageName(), Context.MODE_MULTI_PROCESS).getString(PREF_RUNNING, "").contentEquals("Running")) {
+                        getActivity().stopService(new Intent(getActivity(), MyService.class));
+                        getContext().getSharedPreferences(getActivity().getPackageName(), Context.MODE_MULTI_PROCESS).edit().putString(PREF_RUNNING, "Not running");
+                    } else {
+                        getActivity().startService(new Intent(getActivity(), MyService.class));
+                    //    getContext().getSharedPreferences(getActivity().getPackageName(), Context.MODE_MULTI_PROCESS).edit().putString(PREF_RUNNING, "Not running");
+                    }
                     Handler handler = new Handler();
                     handler.postDelayed(new Runnable() {
                         @Override
@@ -156,7 +158,7 @@ public class FirstFragment extends Fragment {
 
                 }
 
-
+            }
 
 
                      //   binding.ServiceStatus.setText("started");
@@ -171,7 +173,7 @@ public class FirstFragment extends Fragment {
                         //   } else {
                         // if (getActivity().stopService(new Intent(getContext(), gps.class)) != false) ;
                         //   binding.ServiceStatus.setText(String.valueOf(MainActivity.sharedPreferences.getBoolean(PREF_RUNNING, false)));
-                }
+
 
 
 
